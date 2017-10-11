@@ -26,14 +26,31 @@ def load_planar_dataset():
     Y = np.squeeze(Y)
     
     plt.scatter(X[0,:], X[1,:],c=Y,s=40,cmap=plt.cm.Spectral)
-    plt.show()
     return X,Y
 
 #生成分类器的边界
-def plot_decision_boundary(model, x, y)
-    x_min, x_max = X[0,:].min() - 1, x[0,:].max() + 1
+def plot_decision_boundary(model, X, Y):
+    x_min, x_max = X[0,:].min() - 1, X[0,:].max() + 1
     y_min, y_max = X[1,:].min() - 1, X[1,:].max() + 1
 
+    h = 0.01
     xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+    Z = model(np.c_[xx.ravel(),yy.ravel()])
+    Z = Z.reshape(xx.shape)
 
-load_planar_dataset()
+    plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
+    plt.ylabel('x2')
+    plt.xlabel('x1')
+    plt.scatter(X[0,:], X[1,:],c=Y,s=40,cmap=plt.cm.Spectral)
+
+X,Y = load_planar_dataset()
+clf = sklearn.linear_model.LogisticRegressionCV()
+clf.fit(X.T, Y.T.ravel()) #数据拟合
+
+plot_decision_boundary(lambda x:clf.predict(x),X,Y)
+
+plt.title("Logistic Regression")
+
+LR_predictions = clf.predict(X.T)
+print('logistic回归的精确度：%d' % float((np.dot(Y,LR_predictions) + np.dot(1-Y, 1-LR_predictions))/float(Y.size)*100) + "%")
+plt.show()
