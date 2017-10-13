@@ -7,8 +7,8 @@ from scipy import ndimage
 
 #导入数据
 def load_dataset():
-    train_dataset = h5py.File("train_cat.h5","r") #读取训练数据，共209张图片
-    test_dataset = h5py.File("test_cat.h5", "r") #读取测试数据，共50张图片
+    train_dataset = h5py.File(".\\logistic\\train_cat.h5","r") #读取训练数据，共209张图片
+    test_dataset = h5py.File(".\\logistic\\test_cat.h5", "r") #读取测试数据，共50张图片
     
     train_set_x_orig = np.array(train_dataset["train_set_x"][:]) #原始训练集（209*64*64*3）
     train_set_y_orig = np.array(train_dataset["train_set_y"][:]) #原始训练集的标签集（y=0非猫,y=1是猫）（209*1）
@@ -141,8 +141,7 @@ def model(X_train, Y_train, X_test, Y_test, num_iterations = 2000, learning_rate
 
 #初始化数据
 train_set_x_orig, train_set_y, test_set_x_orig, test_set_y, classes = load_dataset()
-#image_show(100,"train")
-
+#image_show(2,"train")
 m_train = train_set_x_orig.shape[0] #训练集样本个数m
 m_test = test_set_x_orig.shape[0]
 num_px = test_set_x_orig.shape[1] #图片像素大小
@@ -150,7 +149,22 @@ num_px = test_set_x_orig.shape[1] #图片像素大小
 train_set_x_flatten = train_set_x_orig.reshape(train_set_x_orig.shape[0],-1).T #原始训练集的设为（12288*209）
 test_set_x_flatten = test_set_x_orig.reshape(test_set_x_orig.shape[0],-1).T #原始测试集设为（12288*50）
 
+#使用库逻辑回归
+print("使用库逻辑回归")
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+train_set_x_std = sc.fit_transform(train_set_x_flatten.T)
+
+from sklearn.linear_model import LogisticRegression
+lr = LogisticRegression(C=1000.0,random_state=0)
+lr.fit(train_set_x_std, train_set_y.T) #根据给定的训练数据拟合模型
+#预测测试集精准度
+text_set_x_std = sc.fit_transform(test_set_x_flatten.T)
+Y_prediction_test = lr.predict(text_set_x_std)
+test_accuracy = 100 - np.mean(np.abs(Y_prediction_test - test_set_y.reshape(50,))) * 100
+print("精准度为: {} %".format(test_accuracy))
+
+print("使用自制逻辑回归")
 train_set_x = train_set_x_flatten/255. #将训练集矩阵标准化
 test_set_x = test_set_x_flatten/255. #将测试集矩阵标准化
-
-d = model(train_set_x, train_set_y, test_set_x, test_set_y, num_iterations = 1000, learning_rate = 0.005, print_cost = True)
+d = model(train_set_x, train_set_y, test_set_x, test_set_y, num_iterations = 1000, learning_rate = 0.005, print_cost = False)
