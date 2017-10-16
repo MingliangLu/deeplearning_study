@@ -1,62 +1,32 @@
+#神经网络猫识别器，采用两层神经，神经元个数为4
 import numpy as np
 import matplotlib.pyplot as plt
 import sklearn
 import sklearn.datasets
 import sklearn.linear_model
+import h5py
 
-#生成样本数据
-def load_planar_dataset():
-    m = 400 #总样本数
-    N = int(m/2) #每种样本数
-    D = 2 #维数
-    a = 4 #花瓣延伸的最大长度
-    X = np.zeros((m,D)) #初始化样本矩阵
-    Y = np.zeros((m,1), dtype='uint8') #初始化标签矩阵，0为红色，1为蓝色
+#导入数据
+#导入数据
+def load_dataset():
+    train_dataset = h5py.File(".\\logistic\\train_cat.h5","r") #读取训练数据，共209张图片
+    test_dataset = h5py.File(".\\logistic\\test_cat.h5", "r") #读取测试数据，共50张图片
     
-    #随机分配样本坐标，使样本组成一朵花形
-    for j in range(2): 
-        ix = range(N*j,N*(j+1))
-        t = np.linspace(j*3.12,(j+1)*3.12,N) + np.random.randn(N)*0.2 #角度
-        r = a*np.sin(4*t) + np.random.randn(N)*0.2 #半径
-        X[ix] = np.c_[r*np.sin(t),r*np.cos(t)]
-        Y[ix] = j
+    train_set_x_orig = np.array(train_dataset["train_set_x"][:]) #原始训练集（209*64*64*3）
+    train_set_y_orig = np.array(train_dataset["train_set_y"][:]) #原始训练集的标签集（y=0非猫,y=1是猫）（209*1）
     
-    X = X.T
-    Y = Y.T
-    Y = np.squeeze(Y)
+    test_set_x_orig = np.array(test_dataset["test_set_x"][:]) #原始测试集（50*64*64*3
+    test_set_y_orig = np.array(test_dataset["test_set_y"][:]) #原始测试集的标签集（y=0非猫,y=1是猫）（50*1）
     
-    plt.scatter(X[0,:], X[1,:],c=Y,s=40,cmap=plt.cm.Spectral)
-    return X,Y
-
-#生成分类器的边界
-def plot_decision_boundary(model, X, Y):
-    x_min, x_max = X[0,:].min() - 1, X[0,:].max() + 1
-    y_min, y_max = X[1,:].min() - 1, X[1,:].max() + 1
-
-    h = 0.01
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-    Z = model(np.c_[xx.ravel(),yy.ravel()])
-    Z = Z.reshape(xx.shape)
-
-    plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
-    plt.ylabel('x2')
-    plt.xlabel('x1')
-    plt.scatter(X[0,:], X[1,:],c=Y,s=40,cmap=plt.cm.Spectral)
-
-X,Y = load_planar_dataset()
-clf = sklearn.linear_model.LogisticRegressionCV()
-clf.fit(X.T, Y.T.ravel()) #数据拟合
-
-#plot_decision_boundary(lambda x:clf.predict(x),X,Y)
-
-#plt.title("Logistic Regression")
-
-LR_predictions = clf.predict(X.T)
-print('logistic回归的精确度：%d' % float((np.dot(Y,LR_predictions) + np.dot(1-Y, 1-LR_predictions))/float(Y.size)*100) + "%")
+    train_set_y_orig = train_set_y_orig.reshape((1,train_set_y_orig.shape[0])) #原始训练集的标签集设为（1*209）
+    test_set_y_orig = test_set_y_orig.reshape((1,test_set_y_orig.shape[0])) #原始测试集的标签集设为（1*50）
+    
+    classes = np.array(test_dataset["list_classes"][:])
+    return train_set_x_orig, train_set_y_orig, test_set_x_orig, test_set_y_orig, classes
 
 #sigmoid函数
-def sigmoid(x):
-    s = 1/(1 + np.exp(-x))
+def sigmoid(z):
+    s = 1.0/(1+np.exp(-z))
     return s
 
 #获得每一层的节点数
@@ -146,7 +116,7 @@ def update_parameters(parameters, grads, learning_rate = 1.2):
     
     return parameters
 
-def nn_model(X, Y, n_h, num_iterations = 10000, print_cost = False):
+def nn_cat_model(X, Y, n_h, num_iterations = 1000, print_cost = False):
     np.random.seed(3)
     n_x = layer_sizes(X,Y)[0]
     n_y = layer_sizes(X,Y)[2]
@@ -157,42 +127,44 @@ def nn_model(X, Y, n_h, num_iterations = 10000, print_cost = False):
     W2 = parameters["W2"]
     b2 = parameters["b2"]
 
+    #迭代计算最优参数
     for i in range(0, num_iterations):
         A2, cache = forward_propagation(X, parameters)
         cost = compute_cost(A2, Y, parameters) 
         grads = backward_propagation(parameters, cache, X, Y)
-        parameters = update_parameters(parameters, grads)
+        parameters = update_parameters(parameters, grads, learning_rate = 0.0075)
         
-        if print_cost and i % 1000 == 0:
+        if print_cost and i % 100 == 0:
             print("循环%i次后的成本: %f" %(i, cost))
 
-    return parameters    
+    return parameters
 
 #预测结果
 def predict(parameters, X):
-    A2, cache= forward_propagation(X, parameters)
-    predictions = (A2 > 0.5)
+    A2, cache = forward_propagation(X, parameters)
+    predictions = np.zeros((1,A2.shape[1]))
+    for i in range(0, A2.shape[1]):
+        if A2[0,i] > 0.5:
+            predictions[0,i] = 1
+        else:
+            predictions[0,i] = 0
     
     return predictions
 
-#将数据输入神经网络模型
-parameters = nn_model(X, Y, n_h = 4, num_iterations = 10000, print_cost=True)
-predictions = predict(parameters, X)
+#初始化数据
+train_set_x_orig, train_set_y, test_set_x_orig, test_set_y, classes = load_dataset()
+m_train = train_set_x_orig.shape[0] #训练集样本个数m
+m_test = test_set_x_orig.shape[0]
+train_set_x_flatten = train_set_x_orig.reshape(train_set_x_orig.shape[0],-1).T #原始训练集的设为（12288*209）
+test_set_x_flatten = test_set_x_orig.reshape(test_set_x_orig.shape[0],-1).T #原始测试集设为（12288*50）
+train_x = train_set_x_flatten/255.
+test_x = test_set_x_flatten/255.
+#将数据送入模型
+parameters = nn_cat_model(train_x, train_set_y.T.squeeze(), 4, num_iterations = 2500, print_cost = True)
+#预测
+predictions = predict(parameters, test_x)
+predictions_train = predict(parameters, train_x)
+Y = test_set_y
 print ('准确度: %d' % float((np.dot(Y,predictions.T) + np.dot(1-Y,1-predictions.T))/float(Y.size)*100) + '%') #打印精确度
-
-plot_decision_boundary(lambda x: predict(parameters, x.T), X, Y)
-plt.title("Decision Boundary for hidden layer size " + str(4))
-
-#不同隐藏层节点数下分类效果
-# plt.figure(figsize=(16, 32))
-# hidden_layer_sizes = [1, 2, 3, 4, 5, 20, 50, 100]
-# for i, n_h in enumerate(hidden_layer_sizes):
-#     plt.subplot(5, 2, i+1)
-#     plt.title('Hidden Layer of size %d' % n_h)
-#     parameters = nn_model(X, Y, n_h, num_iterations = 5000)
-#     plot_decision_boundary(lambda x: predict(parameters, x.T), X, Y)
-#     predictions = predict(parameters, X)
-#     accuracy = float((np.dot(Y,predictions.T) + np.dot(1-Y,1-predictions.T))/float(Y.size)*100)
-#     print ("节点数为{}时的分类准确度为 : {} %".format(n_h, accuracy))
-
-plt.show()
+Y = train_set_y
+print ('训练集准确度: %d' % float((np.dot(Y,predictions_train.T) + np.dot(1-Y,1-predictions_train.T))/float(Y.size)*100) + '%') #打印精确度
